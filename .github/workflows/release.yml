@@ -1,0 +1,34 @@
+name: Release
+
+# Push a tag like v2.0.0 and this workflow builds naver-map-importer-v2.0.0.zip
+# and attaches it to a GitHub Release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check that manifest version matches the tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(node -p "require('./manifest.json').version")
+          echo "tag=$TAG manifest=$VER"
+          [ "$TAG" = "$VER" ] || { echo "::error::manifest.json version ($VER) does not match tag ($TAG)"; exit 1; }
+
+      - name: Build zip
+        run: bash scripts/build-zip.sh
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+          body: |
+            **Install:** download the zip, unzip it, open `chrome://extensions`, enable *Developer mode*, click *Load unpacked* and choose the unzipped folder.

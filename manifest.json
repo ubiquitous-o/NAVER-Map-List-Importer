@@ -1,0 +1,118 @@
+{
+  "manifest_version": 3,
+  "name": "NAVER Map List Importer",
+  "version": "2.1.0",
+  "description": "Import your Google Maps saved places (shared list link or Takeout CSV) into a NAVER Map saved list: fetches Korean names from Google Maps, then saves each place automatically.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://map.naver.com/*",
+    "https://*.map.naver.com/*",
+    "https://*.place.naver.com/*",
+    "https://maps.app.goo.gl/*",
+    "https://www.google.com/*",
+    "https://www.google.co.jp/*",
+    "https://www.google.co.kr/*",
+    "https://www.google.co.uk/*",
+    "https://www.google.co.in/*",
+    "https://www.google.com.au/*",
+    "https://www.google.com.tw/*",
+    "https://www.google.com.hk/*",
+    "https://www.google.com.sg/*",
+    "https://www.google.com.br/*",
+    "https://www.google.com.mx/*",
+    "https://www.google.ca/*",
+    "https://www.google.de/*",
+    "https://www.google.fr/*",
+    "https://www.google.es/*",
+    "https://www.google.it/*",
+    "https://www.google.nl/*",
+    "https://www.google.com.tr/*",
+    "https://www.google.co.th/*",
+    "https://www.google.com.vn/*",
+    "https://www.google.com.ph/*",
+    "https://www.google.co.id/*",
+    "https://www.google.com.my/*",
+    "https://www.google.pl/*",
+    "https://www.google.se/*",
+    "https://www.google.ch/*",
+    "https://www.google.at/*",
+    "https://www.google.be/*",
+    "https://www.google.pt/*",
+    "https://www.google.ie/*",
+    "https://www.google.co.nz/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "NAVER Map List Importer",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://map.naver.com/*",
+        "https://*.map.naver.com/*",
+        "https://*.place.naver.com/*"
+      ],
+      "js": [
+        "banner.js",
+        "content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.google.com/maps*",
+        "https://www.google.co.jp/maps*",
+        "https://www.google.co.kr/maps*",
+        "https://www.google.co.uk/maps*",
+        "https://www.google.co.in/maps*",
+        "https://www.google.com.au/maps*",
+        "https://www.google.com.tw/maps*",
+        "https://www.google.com.hk/maps*",
+        "https://www.google.com.sg/maps*",
+        "https://www.google.com.br/maps*",
+        "https://www.google.com.mx/maps*",
+        "https://www.google.ca/maps*",
+        "https://www.google.de/maps*",
+        "https://www.google.fr/maps*",
+        "https://www.google.es/maps*",
+        "https://www.google.it/maps*",
+        "https://www.google.nl/maps*",
+        "https://www.google.com.tr/maps*",
+        "https://www.google.co.th/maps*",
+        "https://www.google.com.vn/maps*",
+        "https://www.google.com.ph/maps*",
+        "https://www.google.co.id/maps*",
+        "https://www.google.com.my/maps*",
+        "https://www.google.pl/maps*",
+        "https://www.google.se/maps*",
+        "https://www.google.ch/maps*",
+        "https://www.google.at/maps*",
+        "https://www.google.be/maps*",
+        "https://www.google.pt/maps*",
+        "https://www.google.ie/maps*",
+        "https://www.google.co.nz/maps*"
+      ],
+      "js": [
+        "csv.js",
+        "banner.js",
+        "gmaps.js"
+      ],
+      "all_frames": false,
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

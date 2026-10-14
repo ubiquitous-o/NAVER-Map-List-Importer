@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>NAVER Map List Importer</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:13px;width:400px;margin:0;padding:12px;color:#17202A;background:#F7F8F6}
+body.tab{width:auto;max-width:760px;margin:0 auto;padding:24px}
+body.tab #log{height:420px}
+h1{display:flex;align-items:center;justify-content:space-between}
+h1 a{font-size:12px;font-weight:500;color:#1a6fb3;text-decoration:none}
+.banner{margin:0 0 10px;padding:8px 10px;border-radius:6px;background:#E6F7EC;border:1px solid #9ad8b2;color:#0B2A17;display:none}
+.banner.show{display:block}
+h1{font-size:15px;margin:0 0 8px}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input[type=text],input[type=number],textarea{width:100%;box-sizing:border-box;border:1px solid #cfd5d2;border-radius:6px;padding:6px 8px;font:inherit;background:#fff}
+textarea{height:90px;font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row input[type=number]{width:70px}
+button{font:inherit;font-weight:600;padding:7px 12px;border-radius:6px;border:1px solid #cfd5d2;background:#fff;cursor:pointer}
+button.primary{background:#03C75A;color:#0B2A17;border-color:transparent}
+button.danger{background:#FBE9E6;color:#C8321E;border-color:transparent}
+button:disabled{opacity:.5;cursor:default}
+.stat{margin:10px 0 6px;padding:8px 10px;background:#fff;border:1px solid #DEE3E0;border-radius:6px;font-variant-numeric:tabular-nums}
+.stat b{font-size:16px}
+#log{height:150px;overflow:auto;background:#fff;border:1px solid #DEE3E0;border-radius:6px;padding:6px 8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap}
+.ok{color:#0a7a3b}.ng{color:#C8321E}.sk{color:#8a6d00}
+small{color:#5D6975}
+</style></head><body>
+<h1>🇰🇷 NAVER Map List Importer <a id="opentab" href="#" title="Open this panel in a normal tab so it stays open">Open in a tab ↗</a></h1>
+<div class="banner" id="banner"></div>
+<label>Google Maps shared list link</label>
+<div class="row"><input type="text" id="share" placeholder="https://maps.app.goo.gl/… (Share → Copy link on a saved list)" style="flex:1"><button id="load">Load</button></div>
+<small id="shareinfo">Loads every place in the list into the CSV box below.</small>
+<label>…or a CSV (file or paste)</label>
+<input type="file" id="file" accept=".csv,text/csv">
+<textarea id="csv" placeholder="Paste a Google Takeout CSV (Title,Note,URL,...) as is, or Name,Korean name,Latitude,Longitude,..."></textarea>
+<small id="parsed">0 places</small>
+<label>Target list name (create it in NAVER Map first)</label>
+<input type="text" id="list" value="My list">
+<div class="row" style="margin-top:8px"><label style="margin:0">Delay between places (sec)</label><input type="number" id="delay" value="0.5" min="0" step="0.5" max="30"></div>
+<div class="row" style="margin-top:10px">
+<button class="primary" id="start">Start</button>
+<button id="pause">Pause</button>
+<button id="resume">Resume</button>
+<button class="danger" id="reset">Reset</button>
+</div>
+<div class="stat" id="stat">Idle</div>
+<div id="log"></div>
+<div class="row" style="margin-top:8px"><button id="copyfail">Copy failures</button><button id="copylog">Copy log</button><button id="copycsv">Copy enriched CSV</button></div>
+<small>Your inputs are kept when this popup closes. Log in to map.naver.com, then press Start. With a Takeout CSV the tool first fetches Korean names/addresses from Google Maps (step 1), then saves each place to your NAVER list (step 2). Leave the working tab alone while it runs.</small>
+<script src="csv.js"></script>
+<script src="gmlist.js"></script>
+<script src="popup.js"></script>
+</body></html>
