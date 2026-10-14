@@ -79,7 +79,9 @@
     const out = list.slice(0, 12).map((li, i) => {
       const link = nameLinkOf(li);
       const title = (textOf(link).split('\n')[0] || textOf(li).split('\n')[0] || '').trim();
-      let sc = 0; for (const n of names) if (n) sc = Math.max(sc, similarity(title, n));
+      // NAVER glues the category onto the list title ("광장시장시장", "리움미술관미술관"): a title that starts with the
+      // name and has only a short tail counts as an exact match
+      let sc = 0; for (const n of names) if (n) { sc = Math.max(sc, similarity(title, n)); const a = norm(title), b = norm(n); if (b && a !== b && a.startsWith(b) && a.length - b.length <= 6) sc = Math.max(sc, 0.9 + 0.1 * b.length / a.length); }
       const m = textOf(li).match(GU_RE);
       return { i, title, sc: Number(sc.toFixed(2)), gu: m ? m[1] : '' };
     });
@@ -320,7 +322,9 @@
       if (res.status !== 'direct') {
         const expGu = it.gu || [];
         let cands = res.results.filter(c => !(expGu.length && c.gu && !expGu.includes(c.gu))); // drop other districts when the list shows one
-        const strong = cands.filter(c => c.sc >= 0.3).sort((a, b) => b.sc - a.sc || a.i - b.i);
+        // shops *inside* the place ("공차 동대문디자인플라자점") always go after everything else
+        const atPlace = c => isShopAtPlace(c.title, it.ko || it.query) ? 1 : 0;
+        const strong = cands.filter(c => c.sc >= 0.3).sort((a, b) => atPlace(a) - atPlace(b) || b.sc - a.sc || a.i - b.i);
         // "개미집 광장시장점" for 광장시장 is a shop *inside* the place, not the place. When nothing matches the name
         // itself and the best candidate looks like that, try the next query first (the plain name usually lists the place).
         if (strong.length && !strong.some(c => c.sc >= 0.9) && isShopAtPlace(strong[0].title, it.ko || it.query) && attempt < queriesOf(it).length - 1) {
