@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NAVER Map List Importer",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Import your Google Maps saved places (shared list link or Takeout CSV) into a NAVER Map saved list: fetches Korean names from Google Maps, then saves each place automatically.",
   "permissions": [
     "storage",

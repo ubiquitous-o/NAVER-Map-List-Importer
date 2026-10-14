@@ -99,7 +99,7 @@
     // first visible text that looks like a Korean road address
     const els = [...document.querySelectorAll('span,div,p,a,li')].filter(visible);
     for (const el of els) {
-      const t = textOf(el);
+      const t = textOf(el).split('\n')[0].trim(); // first line only: the same block often carries "N번 출구에서 98m" / "미터"
       if (t.length <= 80 && /^(서울|부산|대전|대구|인천|광주|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)(특별시|광역시|특별자치시|특별자치도|도)?\s+\S+(구|시|군)\s+\S/.test(t)) return t;
     }
     return '';
@@ -194,24 +194,41 @@
 
   const handlers = { ping: async () => ({ ok: true, href: location.href }), listResults: cmdListResults, clickResult: cmdClickResult, checkAddress: cmdCheckAddress, clickSave: cmdClickSave, chooseList: cmdChooseList };
 
+  // Frames only talk to each other when both sides are NAVER pages: a command is accepted only from the
+  // parent frame on a NAVER origin, a reply only from the exact frame window it was sent to.
+  const NAVER_ORIGIN = /^https:\/\/([a-z0-9-]+\.)*naver\.com$/;
+
   // child frames: answer postMessage commands from the top frame
   if (!IS_TOP) {
     window.addEventListener('message', async ev => {
-      const d = ev.data; if (!d || d.type !== 'nmi-cmd') return;
+      if (ev.source !== window.parent || !NAVER_ORIGIN.test(ev.origin)) return;
+      const d = ev.data; if (!d || d.type !== 'nmi-cmd' || typeof d.id !== 'string') return;
       let res; try { res = await (handlers[d.cmd] || (async () => ({ ok: false, status: 'badcmd' })))(d.args || {}); }
       catch (e) { res = { ok: false, status: 'error', note: String(e) }; }
-      window.parent.postMessage({ type: 'nmi-res', id: d.id, res }, '*');
+      window.parent.postMessage({ type: 'nmi-res', id: d.id, res }, ev.origin);
     });
     return;
   }
 
   // ---------- top frame: orchestrator ----------
-  let seq = 0; const pending = new Map();
-  window.addEventListener('message', ev => { const d = ev.data; if (d && d.type === 'nmi-res' && pending.has(d.id)) { pending.get(d.id)(d.res); pending.delete(d.id); } });
-  function ask(frameWin, cmd, args, timeout = 15000) {
+  // pending replies: id -> { resolve, win, cmd }. Commands go to the origin the frame reported on its ping;
+  // only the ping itself (no payload) is posted with '*', because the frame's origin is unknown until it answers.
+  const pending = new Map();
+  const newId = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random());
+  window.addEventListener('message', ev => {
+    const d = ev.data; if (!d || d.type !== 'nmi-res' || !pending.has(d.id)) return;
+    const p = pending.get(d.id);
+    if (ev.source !== p.win || !NAVER_ORIGIN.test(ev.origin)) return;
+    pending.delete(d.id);
+    p.resolve(p.cmd === 'ping' && d.res && typeof d.res === 'object' ? { ...d.res, origin: ev.origin } : d.res);
+  });
+  // frame = { win, origin } as returned by discover(); a bare Window is accepted only for the ping
+  function ask(frame, cmd, args, timeout = 15000) {
+    const win = frame && frame.win ? frame.win : frame, origin = (frame && frame.origin) || (cmd === 'ping' ? '*' : null);
     return new Promise(resolve => {
-      const id = ++seq; pending.set(id, resolve);
-      try { frameWin.postMessage({ type: 'nmi-cmd', id, cmd, args }, '*'); } catch (e) { pending.delete(id); resolve({ ok: false, status: 'postfail', note: String(e) }); return; }
+      if (!win || !origin) return resolve({ ok: false, status: 'postfail', note: 'no frame/origin for ' + cmd });
+      const id = newId(); pending.set(id, { resolve, win, cmd });
+      try { win.postMessage({ type: 'nmi-cmd', id, cmd, args }, origin); } catch (e) { pending.delete(id); resolve({ ok: false, status: 'postfail', note: String(e) }); return; }
       setTimeout(() => { if (pending.has(id)) { pending.delete(id); resolve({ ok: false, status: 'timeout:' + cmd }); } }, timeout);
     });
   }
@@ -231,12 +248,12 @@
       const raw = [];
       for (const f of allFrames()) {
         const w = f.contentWindow; const r = await ask(w, 'ping', {}, 1200);
-        if (r && r.ok) raw.push({ win: w, href: r.href || '', id: f.id || f.name || '' });
+        if (r && r.ok && r.origin) raw.push({ win: w, origin: r.origin, href: r.href || '', id: f.id || f.name || '' });
       }
       const isSearch = x => /\/list\b|[?&]query=|\/search\b/.test(x.href) || /search/i.test(x.id);
       const search = raw.find(isSearch) || null;
       const entry = raw.find(x => !isSearch(x) && /place\.naver\.com|\/place\/|\/restaurant\/|\/cafe\/|\/hairshop\/|\/hospital\/|\/accommodation\/|\/\d{5,}\b/.test(x.href)) || raw.find(x => !isSearch(x) && /entry/i.test(x.id)) || null;
-      last = { search: search && search.win, entry: entry && entry.win, raw };
+      last = { search: search && { win: search.win, origin: search.origin }, entry: entry && { win: entry.win, origin: entry.origin }, raw };
       if (want === 'search' && last.search) return last;
       if (want === 'entry' && last.entry) return last;
       if (!want && (last.search || last.entry)) return last;
@@ -244,6 +261,9 @@
     }
     return last;
   }
+  // "<other shop> <place>점" = a branch of some other business located at the place (prefix required: "포셋 성수점" for 포셋 성수 is the place itself)
+  const isShopAtPlace = (title, place) => { const t = norm(title), p = norm(place); return !!p && t !== p && t.endsWith(p + '점') && t.length > p.length + 1; };
+  const isBareAddress = s => /^(대한민국\s+)?(서울|부산|대전|대구|인천|광주|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)(특별시|광역시|특별자치시|특별자치도|도)?\s+\S+(구|시|군)\s+(\S+\s+)?\S+(로|길|동|가)(\d+(번길)?)?\s+\d+[-\d]*\s*$/.test(String(s || '').trim());
   const queriesOf = it => (it.queries && it.queries.length) ? it.queries : [it.query];
   const queryFor = (it, attempt) => { const qs = queriesOf(it); return qs[Math.min(attempt, qs.length - 1)]; };
   const searchUrl = (it, attempt = 0) => {
@@ -255,7 +275,7 @@
   const panel = (t, o) => nmiBanner(t, o);
 
   async function finishItem(state, res) {
-    const retryable = !res.ok && /^(noresults|nomatch|nosearchframe|noentryframe|wrongplace)$/.test(res.status || '');
+    const retryable = !res.ok && /^(noresults|nomatch|nosearchframe|noentryframe|wrongplace|branchonly)$/.test(res.status || '');
     const qs = queriesOf(state.items[state.idx]); const at = state.attempt || 0;
     if (retryable && at < qs.length - 1) {
       state.attempt = at + 1; state.navIdx = -1; state.retryNote = (state.retryNote ? state.retryNote + ',' : '') + res.status;
@@ -279,6 +299,9 @@
       state.results[state.idx] = { ok: true, status: 'skipped', note: it.skip }; state.idx += 1; state.attempt = 0; state.retryNote = ''; state.navIdx = -1;
       await chrome.storage.local.set({ nmi: state }); return next();
     }
+    if (isBareAddress(it.ko) || isBareAddress(it.name)) { // e.g. "서울특별시 종로구 삼일대로17길 46": a dropped pin, not a place
+      return finishItem(state, { ok: false, status: 'addressonly', note: 'Google pin is a street address, not a place: ' + (it.ko || it.name) }).then(next);
+    }
     const attempt = state.attempt || 0;
     const url = searchUrl(it, attempt);
     // navigate exactly once per item; never judge by the URL (NAVER rewrites it)
@@ -297,6 +320,11 @@
         const expGu = it.gu || [];
         let cands = res.results.filter(c => !(expGu.length && c.gu && !expGu.includes(c.gu))); // drop other districts when the list shows one
         const strong = cands.filter(c => c.sc >= 0.3).sort((a, b) => b.sc - a.sc || a.i - b.i);
+        // "개미집 광장시장점" for 광장시장 is a shop *inside* the place, not the place. When nothing matches the name
+        // itself and the best candidate looks like that, try the next query first (the plain name usually lists the place).
+        if (strong.length && !strong.some(c => c.sc >= 0.9) && isShopAtPlace(strong[0].title, it.ko || it.query) && attempt < queriesOf(it).length - 1) {
+          return finishItem(state, { ok: false, status: 'branchonly', note: 'results=' + strong.slice(0, 4).map(c => c.title).join(' / ') }).then(next);
+        }
         const weak = cands.filter(c => c.sc < 0.3); // name didn't match (English vs Hangul etc.): only acceptable with a street-level address match
         cands = strong.concat(weak).slice(0, 5);
         if (!cands.length) return finishItem(state, { ok: false, status: 'nomatch', note: 'results=' + res.results.slice(0, 6).map(c => c.title + (c.gu ? '(' + c.gu + ')' : '') + ' ' + c.sc).join(' / ') }).then(next);

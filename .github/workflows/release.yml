@@ -25,10 +25,12 @@ jobs:
       - name: Build zip
         run: bash scripts/build-zip.sh
 
+      # GitHub's own CLI (preinstalled on the runner) — no third-party action with contents:write access
       - name: Create release
-        uses: softprops/action-gh-release@v3
-        with:
-          files: dist/*.zip
-          generate_release_notes: true
-          body: |
-            **Install:** download the zip, unzip it, open `chrome://extensions`, enable *Developer mode*, click *Load unpacked* and choose the unzipped folder.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes "**Install:** download the zip, unzip it, open \`chrome://extensions\`, enable *Developer mode*, click *Load unpacked* and choose the unzipped folder."

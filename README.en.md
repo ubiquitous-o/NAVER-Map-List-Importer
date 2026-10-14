@@ -54,6 +54,7 @@ The popup remembers what you typed (link, CSV, list name, delay) even though Chr
 | `skipped` | Google says the place is permanently closed |
 | `noresults` / `nomatch` | NAVER search found nothing similar (all query variants tried) |
 | `wrongplace` | the best search result is in a different district / street than Google's address — not saved, to avoid the wrong branch of a chain |
+| `addressonly` | the Google pin is a bare street address (e.g. *서울특별시 종로구 삼일대로17길 46*), not a place — left for you, so an unrelated shop at that address is not saved |
 | `nolist` | the list name was not found in the save sheet — check the spelling |
 | `notchecked` | the list checkbox could not be ticked; the note contains the sheet's HTML for debugging |
 
@@ -75,7 +76,7 @@ For each place the extension tries several search strings in order and stops at 
 <district> <Korean name>   →   <Korean name>   →   <district> <brand>   →   <brand>
 ```
 
-`brand` is the English name with store/branch words removed (e.g. *Gentle Monster Flagship Store Sinsa* → *Gentle Monster*). Results in a different district than Google's address are dropped first (the result list shows the district). The rest are scored against the name with a bigram similarity (exact match beats a longer name that merely contains it, so *동대문디자인플라자* wins over *공차 동대문디자인플라자점*) and opened best‑first; each one's address is compared with the Google address (district token such as `종로구`, or road token such as `율곡로3길`). Candidates whose name did not match at all (NAVER lists some shops under an English or a different Korean name) are still accepted when the street matches. If nothing matches, the place is reported as `wrongplace`/`nomatch` rather than saved.
+`brand` is the English name with store/branch words removed (e.g. *Gentle Monster Flagship Store Sinsa* → *Gentle Monster*). When the Korean name mixes Latin and Hangul, its Hangul part alone is tried too (*Åland 에이랜드 가로수길점* → *에이랜드 가로수길점*). Results in a different district than Google's address are dropped first (the result list shows the district). The rest are scored against the name with a bigram similarity (exact match beats a longer name that merely contains it, so *동대문디자인플라자* wins over *공차 동대문디자인플라자점*) and opened best‑first; each one's address is compared with the Google address (district token such as `종로구`, or road token such as `율곡로3길`). Candidates whose name did not match at all (NAVER lists some shops under an English or a different Korean name) are still accepted when the street matches. If nothing matches, the place is reported as `wrongplace`/`nomatch` rather than saved.
 
 ## Privacy & safety
 

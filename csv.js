@@ -42,7 +42,7 @@ function toItems(text) {
     if (/^(閉業|closed|permanently closed)$/i.test(cat)) continue; // skip permanently closed
     const ko = iKo >= 0 ? (r[iKo] || '').trim() : '';
     const urlRaw = iUrl >= 0 ? (r[iUrl] || '').trim() : '';
-    const gurl = /google\.[a-z.]+\/maps/.test(urlRaw) ? urlRaw : '';
+    const gurl = googleMapsUrl(urlRaw);
     const memo = iMemo >= 0 ? (r[iMemo] || '').trim() : '';
     const lat = iLat >= 0 ? parseFloat(r[iLat]) : NaN;
     const lng = iLng >= 0 ? parseFloat(r[iLng]) : NaN;
@@ -55,6 +55,17 @@ function toItems(text) {
     items.push({ name, ko, ko2, query: queries[0], queries, lat: isFinite(lat) ? lat : null, lng: isFinite(lng) ? lng : null, gu, addr, addrKey: addrKeyOf(addr), gurl, memo });
   }
   return items;
+}
+// Accept only a real Google Maps URL: https, a Google host with a /maps path (or maps.google.*), or a
+// maps.app.goo.gl / goo.gl/maps short link. Anything else is dropped, so a crafted CSV can never send the Google tab elsewhere.
+function googleMapsUrl(raw) {
+  let u; try { u = new URL(String(raw || '').trim()); } catch { return ''; }
+  if (u.protocol !== 'https:') return '';
+  const h = u.hostname.toLowerCase();
+  if (h === 'maps.app.goo.gl') return u.href;
+  if (h === 'goo.gl') return u.pathname.startsWith('/maps') ? u.href : '';
+  if (!/^(www\.|maps\.)?google(\.[a-z]{2,3}){1,2}$/.test(h)) return '';
+  return (h.startsWith('maps.') || u.pathname.startsWith('/maps')) ? u.href : '';
 }
 // rows that only carry a Google Maps URL (Takeout export) need the Korean name / address fetched first
 const needsEnrich = it => !!it.gurl && !it.ko && !it.enriched;
@@ -94,31 +105,40 @@ function cleanQuery(n) {
   q = q.replace(/\s*[\(（][^)）]*[\)）]\s*/g, ' ').replace(/\s+/g, ' ').trim();
   return q || String(n || '');
 }
-// Road/dong token from an address, e.g. "서울특별시 종로구 율곡로3길 4" -> "율곡로3길"
+// Road/dong token from an address, e.g. "서울특별시 종로구 율곡로3길 4" -> "율곡로3길".
+// Scans every token (not just those after the 구): Google sometimes returns the address reversed,
+// "4floor, 1 율곡로 종로구 서울특별시", and the road token must still be found.
 function addrKeyOf(a) {
   if (!a) return '';
-  const toks = a.split(/\s+/);
-  const i = toks.findIndex(t => /(구|시|군)$/.test(t));
-  for (let k = (i >= 0 ? i + 1 : 0); k < toks.length; k++) { if (/[가-힣]/.test(toks[k]) && /(로|길|동|가)\d*$/.test(toks[k].replace(/\d+$/, '')) ) return toks[k]; if (/(로|길)\d*(번길)?$/.test(toks[k])) return toks[k]; }
+  for (const raw of a.split(/\s+/)) {
+    const t = raw.replace(/[,，.]+$/, '');
+    if (!/[가-힣]/.test(t) || /(특별시|광역시|자치시|자치도|도|시|군|구)$/.test(t)) continue;
+    if (/(로|길)\d*(번길)?$/.test(t)) return t;
+    if (/(로|길|동|가)\d*$/.test(t.replace(/\d+$/, ''))) return t;
+  }
   return '';
 }
 
 const hasHangul = t => /[가-힣]/.test(t);
 // English brand core: drop store-type words and branch words, keep the leading brand token(s)
 function brandOf(n) {
-  let q = cleanQuery(n).replace(/[^A-Za-z0-9&' ]+/g, ' ');
+  // fold accents first so "Åland" -> "Aland", "Café" -> "Cafe" instead of "land" / "Caf"
+  let q = cleanQuery(n).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9&' ]+/g, ' ');
   q = q.replace(/\b(flagship|store|shop|space|showroom|outlet|main|the hyundai seoul|thehyundai seoul|seoul|hannam|seongsu|sinsa|dosan|hongdae|yeonhui|hapjeong|bukchon|jeonpo|seomyeon|gangnam|shinsegae|yulgokro|central)\b/gi, ' ');
   q = q.replace(/\s+/g, ' ').trim();
   return q.split(' ').slice(0, 2).join(' ');
 }
+// Query order: Korean name (with district, then without) -> its Hangul-only part when the name mixes scripts
+// ("Åland 에이랜드 가로수길점" -> "에이랜드 가로수길점") -> Latin Korean name -> brand core of the Korean name, then of the English name.
 function buildQueries(name, ko, ko2, gu) {
-  const out = []; const push = q => { q = (q || '').replace(/\s+/g, ' ').trim(); if (q && !out.includes(q)) out.push(q); };
+  const out = []; const push = q => { q = (q || '').replace(/\s+/g, ' ').trim(); if (q && !out.some(x => x.toLowerCase() === q.toLowerCase())) out.push(q); };
   const a = cleanQuery(ko || ''), b = cleanQuery(ko2 || ''), n = cleanQuery(name);
-  if (a && hasHangul(a)) { if (gu) push(gu + ' ' + a); push(a); }
-  if (b && hasHangul(b)) { if (gu) push(gu + ' ' + b); push(b); }
-  if (a && !hasHangul(a)) { if (gu) push(gu + ' ' + a); push(a); }
-  const br = brandOf(n);
-  if (br && br.length >= 3) { if (gu) push(gu + ' ' + br); push(br); }
+  const hangulOnly = s => { const h = s.split(' ').filter(hasHangul).join(' '); return (h !== s && h.length >= 2 && !/^[가-힣]{0,3}점$/.test(h)) ? h : ''; };
+  const withGu = q => { if (gu) push(gu + ' ' + q); push(q); };
+  if (a && hasHangul(a)) { withGu(a); if (hangulOnly(a)) withGu(hangulOnly(a)); }
+  if (b && hasHangul(b)) { withGu(b); if (hangulOnly(b)) withGu(hangulOnly(b)); }
+  if (a && !hasHangul(a)) withGu(a);
+  for (const br of [brandOf(a), brandOf(n)]) if (br && br.length >= 3) withGu(br);
   if (!out.length) push(n);
   return out;
 }

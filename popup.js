@@ -15,7 +15,11 @@ async function restoreDraft() {
 function render(state) {
   const s = state || {};
   const res = s.results || [];
-  const ok = res.filter(r => r && r.ok).length, ng = res.filter(r => r && !r.ok).length;
+  // skipped (closed on Google) and already (was in the list before) are not new saves: count them apart so the
+  // saved number matches what NAVER shows
+  const by = st => res.filter(r => r && r.status === st).length;
+  const skipped = by('skipped'), already = by('already'), ng = res.filter(r => r && !r.ok).length;
+  const saved = res.filter(r => r && r.ok).length - skipped - already;
   const total = (s.items || []).length;
   const b = $('banner');
   if (total && s.running) { b.className = 'banner show'; b.textContent = `A job is running: ${total} places → list “${s.list}”. Closing this popup does not stop it. Use Pause to stop.`; }
@@ -28,7 +32,7 @@ function render(state) {
     $('stat').innerHTML = `Step 1 · Fetching Korean names from Google Maps <b>${done}</b> / ${total} · ${mode}`;
     $('log').innerHTML = s.items.map((it, i) => it.enriched ? `<div class="${it.enriched === 'ok' ? 'ok' : 'sk'}">${i + 1}. ${esc(it.name)} → ${esc(it.ko || '(not found)')}${it.skip ? ' ' + esc(it.skip) : ''} ${esc((it.gu || [])[0] || '')}</div>` : '').join('');
   } else {
-    $('stat').innerHTML = `Step 2 · Saving to NAVER Map <b>${Math.min(s.idx || 0, total)}</b> / ${total} · ok ${ok} · failed ${ng} · ${mode}`;
+    $('stat').innerHTML = `Step 2 · Saving to NAVER Map <b>${Math.min(s.idx || 0, total)}</b> / ${total} · saved ${saved}${already ? ' · already ' + already : ''}${skipped ? ' · skipped ' + skipped : ''} · failed ${ng} · ${mode}`;
     $('log').innerHTML = res.map((r, i) => r ? `<div class="${r.ok ? (r.status === 'already' ? 'sk' : 'ok') : (r.status === 'skipped' ? 'sk' : 'ng')}">${i + 1}. ${esc(s.items[i].name)}${s.items[i].ko ? ' / ' + esc(s.items[i].ko) : ''} → ${esc(r.status)}${r.picked ? ' [' + esc(r.picked) + ']' : ''}${r.note ? ' ' + esc(r.note) : ''}</div>` : '').join('');
   }
   $('log').scrollTop = $('log').scrollHeight;

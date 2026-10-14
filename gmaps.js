@@ -17,7 +17,7 @@
     const m2 = a.match(/^\S+\s+([가-힣]+[시군])(?=\s|$)/); if (m2) return [m2[1]];
     return [];
   }
-  const koUrl = u => u + (u.includes('?') ? '&' : '?') + 'hl=ko';
+  const koUrl = u => { const x = new URL(u); x.searchParams.set('hl', 'ko'); return x.href; };
   const needs = it => !!it.gurl && !it.ko && !it.enriched;
   const cidOf = u => ((u || '').match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/) || [])[1] || '';
 
@@ -76,7 +76,11 @@
       location.href = 'https://map.naver.com/p';
       return;
     }
-    if (s.enavIdx !== i) { s.eidx = i; s.enavIdx = i; await set(s); location.href = koUrl(items[i].gurl); return; }
+    if (s.enavIdx !== i) {
+      const safe = googleMapsUrl(items[i].gurl); // re-check right before navigating (stored state may predate the check in csv.js)
+      if (!safe) { items[i].enriched = 'badurl'; items[i].skip = 'not a Google Maps URL'; s.eidx = i + 1; await set(s); return step(); }
+      s.eidx = i; s.enavIdx = i; await set(s); location.href = koUrl(safe); return;
+    }
 
     const it = items[i];
     panel(`[${i + 1}/${items.length}] ${it.name}\nFetching Korean name & address from Google Maps…`);
