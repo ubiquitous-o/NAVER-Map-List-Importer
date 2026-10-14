@@ -222,9 +222,10 @@
     pending.delete(d.id);
     p.resolve(p.cmd === 'ping' && d.res && typeof d.res === 'object' ? { ...d.res, origin: ev.origin } : d.res);
   });
-  // frame = { win, origin } as returned by discover(); a bare Window is accepted only for the ping
+  // frame = { win, origin } as returned by discover(). Never touch properties of a cross-origin Window itself
+  // (reading them throws SecurityError), so the ping passes { win, origin: '*' } explicitly.
   function ask(frame, cmd, args, timeout = 15000) {
-    const win = frame && frame.win ? frame.win : frame, origin = (frame && frame.origin) || (cmd === 'ping' ? '*' : null);
+    const win = frame && frame.win, origin = frame && frame.origin && (frame.origin !== '*' || cmd === 'ping') ? frame.origin : null;
     return new Promise(resolve => {
       if (!win || !origin) return resolve({ ok: false, status: 'postfail', note: 'no frame/origin for ' + cmd });
       const id = newId(); pending.set(id, { resolve, win, cmd });
@@ -247,7 +248,7 @@
     while (Date.now() - t0 < ms) {
       const raw = [];
       for (const f of allFrames()) {
-        const w = f.contentWindow; const r = await ask(w, 'ping', {}, 1200);
+        const w = f.contentWindow; const r = await ask({ win: w, origin: '*' }, 'ping', {}, 1200);
         if (r && r.ok && r.origin) raw.push({ win: w, origin: r.origin, href: r.href || '', id: f.id || f.name || '' });
       }
       const isSearch = x => /\/list\b|[?&]query=|\/search\b/.test(x.href) || /search/i.test(x.id);
